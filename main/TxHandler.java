@@ -71,8 +71,13 @@ public class TxHandler {
      * updating the current UTXO pool as appropriate.
      */
     public Transaction[] handleTxs(Transaction[] possibleTxs) {
-        // IMPLEMENT THIS
-        return possibleTxs;
+        Transaction[] validTransaction = new Transaction[possibleTxs.length];
+        for (Transaction currentTransaction : possibleTxs) {
+            if (this.isValidTx(currentTransaction)){
+                validTransaction[validTransaction.length+1] = currentTransaction;
+            }
+        }
+        return validTransaction;
     }
 
 }
