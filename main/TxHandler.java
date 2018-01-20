@@ -26,26 +26,34 @@ public class TxHandler {
      *     values; and false otherwise.
      */
     public boolean isValidTx(Transaction tx) {
-        int inputSum = 0;
-        int outputSumm = 0;
-
+        double inputSum = 0;
+        double outputSum = 0;
         for (int txNumber = 0; txNumber < tx.numInputs(); txNumber++) {
             Transaction.Input input = tx.getInput(txNumber);
             Transaction.Output output = tx.getOutput(txNumber);
             UTXO utxo = new UTXO(tx.getHash(), txNumber);
+            outputSum+=output.value;
+            inputSum+=tx.getOutput(input.outputIndex).value;
 
+            /*Step #4*/
             if (output.value < 0) {
                 return false;
             }
 
+            /*Step #1*/
             if (!this.copyOfPool.contains(utxo)){
                 return false;
             }
 
+            /*Step #2*/
             if (!Crypto.verifySignature(output.address, tx.getRawDataToSign(txNumber), tx.getRawTx())) {
                 return false;
             }
         }
+
+        /*Step #5*/
+        if (inputSum < outputSum)
+            return false;
 
         return true;
     }
