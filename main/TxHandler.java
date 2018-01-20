@@ -31,7 +31,7 @@ public class TxHandler {
         for (int txNumber = 0; txNumber < tx.numInputs(); txNumber++) {
             Transaction.Input input = tx.getInput(txNumber);
             Transaction.Output output = tx.getOutput(txNumber);
-            UTXO utxo = new UTXO(tx.getHash(), txNumber);
+            UTXO newUTXO = new UTXO(tx.getHash(), txNumber);
             outputSum+=output.value;
             inputSum+=tx.getOutput(input.outputIndex).value;
 
@@ -41,13 +41,20 @@ public class TxHandler {
             }
 
             /*Step #1*/
-            if (!this.copyOfPool.contains(utxo)){
+            if (!this.copyOfPool.contains(newUTXO)){
                 return false;
             }
 
             /*Step #2*/
             if (!Crypto.verifySignature(output.address, tx.getRawDataToSign(txNumber), tx.getRawTx())) {
                 return false;
+            }
+
+            /*Step #3*/
+            for (UTXO currentUTXO : this.copyOfPool.getAllUTXO()) {
+                if (currentUTXO.compareTo(newUTXO) == 0) {
+                    return false;
+                }
             }
         }
 
