@@ -1,6 +1,21 @@
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 
 public class MaxFeeTxHandler{
+
+    class TransactionWithFees {
+
+        Transaction transaction;
+        double fee;
+
+        TransactionWithFees(Transaction transaction, double fee) {
+            this.transaction = transaction;
+            this.fee = fee;
+        }
+
+    }
 
     private UTXOPool currentUTXOPool;
 
@@ -70,40 +85,39 @@ public class MaxFeeTxHandler{
      * updating the current UTXO pool as appropriate.
      */
     public Transaction[] handleTxs(Transaction[] possibleTxs) {
-        ArrayList<Transaction> txList = new ArrayList<>();
-        double maxSum = 0;
-        Transaction[] maxSumTransaction = new Transaction[1];
+        ArrayList<TransactionWithFees> txWithFees = new ArrayList<>();
         for (Transaction currentTransaction : possibleTxs) {
             if (this.isValidTx(currentTransaction)) {
-                txList.add(currentTransaction);
-
                 double inputSum = 0;
-
-                for (Transaction.Input input : currentTransaction.getInputs()) {
-                    UTXO utxoForRemoving = new UTXO(input.prevTxHash, input.outputIndex);
-                    inputSum += currentTransaction.getOutput(input.outputIndex).value;
-                    currentUTXOPool.removeUTXO(utxoForRemoving);
-                }
-
                 double outputSum = 0;
 
+                for (Transaction.Input input : currentTransaction.getInputs()) {
+                    if (input != null) {
+                        UTXO utxoForRemoving = new UTXO(input.prevTxHash, input.outputIndex);
+                        inputSum += currentTransaction.getOutput(input.outputIndex).value;
+                        currentUTXOPool.removeUTXO(utxoForRemoving);
+                    }
+                }
+
                 for (int txOutputIndex = 0; txOutputIndex < currentTransaction.numOutputs(); txOutputIndex++) {
+                    Transaction.Output currentOutput = currentTransaction.getOutput(txOutputIndex);
                     UTXO utxoForAdding = new UTXO(currentTransaction.getHash(), txOutputIndex);
-                    currentUTXOPool.addUTXO(utxoForAdding, currentTransaction.getOutput(txOutputIndex));
-                    outputSum += currentTransaction.getOutput(txOutputIndex).value;
+                    outputSum += currentOutput.value;
+                    currentUTXOPool.addUTXO(utxoForAdding, currentOutput);
                 }
 
-
-                double transactionFee = inputSum - outputSum;
-                if ( transactionFee > maxSum )
-                {
-                    maxSum = transactionFee;
-                    maxSumTransaction[0] = currentTransaction;
-                }
+                txWithFees.add(new TransactionWithFees(currentTransaction, inputSum - outputSum));
             }
         }
 
-        return maxSumTransaction;
+        Transaction[] validTransaction = new Transaction[txWithFees.size()];
+        txWithFees.sort((o1, o2) -> o1.fee > o2.fee ? 1 : 0);
+        ArrayList<Transaction> txList = new ArrayList<>();
+        for (TransactionWithFees txWithFee : txWithFees) {
+            txList.add(txWithFee.transaction);
+        }
+
+        return txList.toArray(validTransaction);
     }
 
 }
