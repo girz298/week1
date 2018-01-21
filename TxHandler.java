@@ -1,9 +1,8 @@
 import java.util.ArrayList;
-import java.util.Iterator;
 
 public class TxHandler {
 
-    private UTXOPool copyOfPool;
+    private UTXOPool currentUTXOPool;
 
     /**
      * Creates a public ledger whose current UTXOPool (collection of unspent transaction outputs) is
@@ -11,7 +10,7 @@ public class TxHandler {
      * constructor.
      */
     public TxHandler(UTXOPool utxoPool) {
-        this.copyOfPool =  new UTXOPool(utxoPool);
+        this.currentUTXOPool = new UTXOPool(utxoPool);
     }
 
     /**
@@ -26,41 +25,43 @@ public class TxHandler {
     public boolean isValidTx(Transaction tx) {
         double inputSum = 0;
         double outputSum = 0;
-        for (int txNumber = 0; txNumber < tx.numInputs(); txNumber++) {
-            Transaction.Input input = tx.getInput(txNumber);
-            Transaction.Output output = tx.getOutput(txNumber);
-            UTXO newUTXO = new UTXO(tx.getHash(), txNumber);
-            outputSum+=output.value;
-            inputSum+=tx.getOutput(input.outputIndex).value;
 
-            /*Step #4*/
-            if (output.value < 0) {
-                return false;
-            }
+        UTXOPool utxoPool = new UTXOPool();
 
+        for (int inputIndex = 0; inputIndex < tx.numInputs(); inputIndex++) {
+            Transaction.Input txInput = tx.getInput(inputIndex);
+            UTXO utxo = new UTXO(txInput.prevTxHash, txInput.outputIndex);
+            Transaction.Output txOutput = currentUTXOPool.getTxOutput(utxo);
             /*Step #1*/
-            if (!this.copyOfPool.contains(newUTXO)){
+            if (!this.currentUTXOPool.contains(utxo)) {
                 return false;
             }
 
             /*Step #2*/
-            if (!Crypto.verifySignature(output.address, tx.getRawDataToSign(txNumber), tx.getRawTx())) {
+            if (!Crypto.verifySignature(txOutput.address, tx.getRawDataToSign(inputIndex), txInput.signature)) {
                 return false;
             }
 
             /*Step #3*/
-            for (UTXO currentUTXO : this.copyOfPool.getAllUTXO()) {
-                if (currentUTXO.compareTo(newUTXO) == 0) {
-                    return false;
-                }
+            if (utxoPool.contains(utxo)) {
+                return false;
             }
+
+            utxoPool.addUTXO(utxo, txOutput);
+            inputSum += txOutput.value;
+        }
+
+        for (Transaction.Output txOutput : tx.getOutputs()) {
+            /*Step #4*/
+            if (txOutput.value < 0) {
+                return false;
+            }
+
+            outputSum += txOutput.value;
         }
 
         /*Step #5*/
-        if (inputSum < outputSum)
-            return false;
-
-        return true;
+        return !(inputSum < outputSum);
     }
 
     /**
@@ -69,13 +70,26 @@ public class TxHandler {
      * updating the current UTXO pool as appropriate.
      */
     public Transaction[] handleTxs(Transaction[] possibleTxs) {
-        Transaction[] validTransaction = new Transaction[possibleTxs.length];
+        ArrayList<Transaction> txList = new ArrayList<>();
+
         for (Transaction currentTransaction : possibleTxs) {
-            if (this.isValidTx(currentTransaction)){
-                validTransaction[validTransaction.length+1] = currentTransaction;
+            if (this.isValidTx(currentTransaction)) {
+                txList.add(currentTransaction);
             }
+
+            for (Transaction.Input input : currentTransaction.getInputs()) {
+                UTXO utxoForRemoving = new UTXO(input.prevTxHash, input.outputIndex);
+                currentUTXOPool.removeUTXO(utxoForRemoving);
+            }
+
+            for (int txOutputIndex = 0; txOutputIndex < currentTransaction.numOutputs(); txOutputIndex++) {
+                UTXO utxoForAdding = new UTXO(currentTransaction.getHash(), txOutputIndex);
+                currentUTXOPool.addUTXO(utxoForAdding, currentTransaction.getOutput(txOutputIndex));
+            }
+
         }
-        return validTransaction;
+        Transaction[] validTransaction = new Transaction[txList.size()];
+        return txList.toArray(validTransaction);
     }
 
 }
