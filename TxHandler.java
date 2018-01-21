@@ -75,19 +75,18 @@ public class TxHandler {
         for (Transaction currentTransaction : possibleTxs) {
             if (this.isValidTx(currentTransaction)) {
                 txList.add(currentTransaction);
-            }
+                for (Transaction.Input input : currentTransaction.getInputs()) {
+                    UTXO utxoForRemoving = new UTXO(input.prevTxHash, input.outputIndex);
+                    currentUTXOPool.removeUTXO(utxoForRemoving);
+                }
 
-            for (Transaction.Input input : currentTransaction.getInputs()) {
-                UTXO utxoForRemoving = new UTXO(input.prevTxHash, input.outputIndex);
-                currentUTXOPool.removeUTXO(utxoForRemoving);
+                for (int txOutputIndex = 0; txOutputIndex < currentTransaction.numOutputs(); txOutputIndex++) {
+                    UTXO utxoForAdding = new UTXO(currentTransaction.getHash(), txOutputIndex);
+                    currentUTXOPool.addUTXO(utxoForAdding, currentTransaction.getOutput(txOutputIndex));
+                }
             }
-
-            for (int txOutputIndex = 0; txOutputIndex < currentTransaction.numOutputs(); txOutputIndex++) {
-                UTXO utxoForAdding = new UTXO(currentTransaction.getHash(), txOutputIndex);
-                currentUTXOPool.addUTXO(utxoForAdding, currentTransaction.getOutput(txOutputIndex));
-            }
-
         }
+
         Transaction[] validTransaction = new Transaction[txList.size()];
         return txList.toArray(validTransaction);
     }
